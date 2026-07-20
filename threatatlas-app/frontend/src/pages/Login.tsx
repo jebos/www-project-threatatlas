@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import axios from 'axios';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -6,15 +7,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Network, AlertCircle, Loader2, KeyRound } from 'lucide-react';
-import { authApi, oidcLoginUrl, type OIDCProviderInfo } from '@/lib/api';
+import { authApi, oidcLoginUrl, type LDAPProviderInfo, type OIDCProviderInfo } from '@/lib/api';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [ldapUsername, setLdapUsername] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [providers, setProviders] = useState<OIDCProviderInfo[]>([]);
-  const { login } = useAuth();
+  const [oidcProviders, setOidcProviders] = useState<OIDCProviderInfo[]>([]);
+  const [ldapProviders, setLdapProviders] = useState<LDAPProviderInfo[]>([]);
+  const [selectedLdap, setSelectedLdap] = useState<LDAPProviderInfo | null>(null);
+  const { login, loginWithToken } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -24,10 +28,10 @@ export default function Login() {
       setError(`Single sign-on failed: ${callbackError}`);
     }
 
-    authApi
-      .listOidcProviders()
-      .then((res) => setProviders(res.data))
-      .catch(() => setProviders([]));
+    Promise.allSettled([authApi.listOidcProviders(), authApi.listLdapProviders()]).then(([oidc, ldap]) => {
+      setOidcProviders(oidc.status === 'fulfilled' ? oidc.value.data : []);
+      setLdapProviders(ldap.status === 'fulfilled' ? ldap.value.data : []);
+    });
   }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -36,10 +40,16 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await login(email, password);
+      if (selectedLdap) {
+        const response = await authApi.loginLdap(selectedLdap.name, ldapUsername, password);
+        await loginWithToken(response.data.access_token);
+      } else {
+        await login(email, password);
+      }
       navigate('/');
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Login failed. Please check your credentials.');
+    } catch (err: unknown) {
+      const detail = axios.isAxiosError(err) ? err.response?.data?.detail : null;
+      setError(typeof detail === 'string' ? detail : 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
@@ -64,13 +74,15 @@ export default function Login() {
         <CardContent className="pb-8">
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-semibold">Email</Label>
+              <Label htmlFor="login-identifier" className="text-sm font-semibold">
+                {selectedLdap ? 'Directory username' : 'Email'}
+              </Label>
               <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
+                id="login-identifier"
+                type={selectedLdap ? 'text' : 'email'}
+                value={selectedLdap ? ldapUsername : email}
+                onChange={(e) => selectedLdap ? setLdapUsername(e.target.value) : setEmail(e.target.value)}
+                placeholder={selectedLdap ? 'e.g. jdoe' : 'you@example.com'}
                 required
                 disabled={loading}
                 className="h-11 rounded-lg border-border/60"
@@ -102,12 +114,12 @@ export default function Login() {
                   Signing in...
                 </>
               ) : (
-                'Sign In'
+                selectedLdap ? `Sign in with ${selectedLdap.display_name}` : 'Sign In'
               )}
             </Button>
           </form>
 
-          {providers.length > 0 && (
+          {(oidcProviders.length > 0 || ldapProviders.length > 0) && (
             <div className="mt-6 space-y-3">
               <div className="relative flex items-center">
                 <div className="flex-grow border-t border-border/60" />
@@ -115,7 +127,31 @@ export default function Login() {
                 <div className="flex-grow border-t border-border/60" />
               </div>
               <div className="grid gap-2">
-                {providers.map((provider) => (
+                {selectedLdap && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full h-11 rounded-lg justify-center gap-2"
+                    onClick={() => { setSelectedLdap(null); setError(''); }}
+                    disabled={loading}
+                  >
+                    Local account
+                  </Button>
+                )}
+                {ldapProviders.map((provider) => (
+                  <Button
+                    key={`ldap-${provider.name}`}
+                    type="button"
+                    variant={selectedLdap?.name === provider.name ? 'default' : 'outline'}
+                    className="w-full h-11 rounded-lg justify-center gap-2"
+                    onClick={() => { setSelectedLdap(provider); setError(''); }}
+                    disabled={loading}
+                  >
+                    <Network className="h-4 w-4" />
+                    {provider.display_name}
+                  </Button>
+                ))}
+                {oidcProviders.map((provider) => (
                   <Button
                     key={provider.name}
                     type="button"

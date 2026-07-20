@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:6d7727bd9499d077ac836720ab303f62f67659d33598af9a78c9a5ef207615e3"
+content_hash = "sha256:c3d48d6110ae7a7650e9121dddef90314d03daa49ed54a1ba8b4359b4fff7b1a"
 
 [[metadata.targets]]
 requires_python = "==3.11.*"
@@ -652,6 +652,19 @@ dependencies = [
 files = [
     {file = "jsonschema_specifications-2025.9.1-py3-none-any.whl", hash = "sha256:98802fee3a11ee76ecaca44429fda8a41bff98b00a0f2838151b113f210cc6fe"},
     {file = "jsonschema_specifications-2025.9.1.tar.gz", hash = "sha256:b540987f239e745613c7a9176f3edb72b832a4ac465cf02712288397832b5e8d"},
+]
+
+[[package]]
+name = "ldap3"
+version = "2.9.1"
+summary = "A strictly RFC 4510 conforming LDAP V3 pure Python client library"
+groups = ["default"]
+dependencies = [
+    "pyasn1>=0.4.6",
+]
+files = [
+    {file = "ldap3-2.9.1-py2.py3-none-any.whl", hash = "sha256:5869596fc4948797020d3f03b7939da938778a0f9e2009f7a072ccf92b8e8d70"},
+    {file = "ldap3-2.9.1.tar.gz", hash = "sha256:f3e7fc4718e3f09dda568b57100095e0ce58633bcabbed8667ce3f8fbaa4229f"},
 ]
 
 [[package]]

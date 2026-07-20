@@ -29,6 +29,7 @@ from app.routers import (
     invitations,
     collaborators,
     oidc_providers,
+    ldap_providers,
     groups,
     scim_tokens,
     scim,
@@ -115,6 +116,7 @@ app.include_router(diagram_versions.router, prefix="/api")
 app.include_router(invitations.router, prefix="/api")
 app.include_router(collaborators.router, prefix="/api")
 app.include_router(oidc_providers.router, prefix="/api")
+app.include_router(ldap_providers.router, prefix="/api")
 app.include_router(groups.router, prefix="/api")
 app.include_router(scim_tokens.router, prefix="/api")
 app.include_router(api_tokens.router, prefix="/api")

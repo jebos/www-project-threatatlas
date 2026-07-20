@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class Token(BaseModel):
@@ -16,6 +16,19 @@ class LoginRequest(BaseModel):
     """Login request schema."""
     email: EmailStr
     password: str
+
+
+class LDAPLoginRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=256)
+    password: str = Field(min_length=1, max_length=1024)
+
+    @field_validator("username")
+    @classmethod
+    def strip_username(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("username must not be blank")
+        return value
 
 
 class OIDCProviderInfo(BaseModel):

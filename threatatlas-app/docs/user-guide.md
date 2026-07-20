@@ -10,7 +10,8 @@ Welcome to **ThreatAtlas** — a platform for community-driven threat modeling.
 ## 📖 Table of Contents
 
 1. [First Login](#first-login)
-2. [Using ThreatAtlas](#using-threatatlas)
+2. [Directory Login](#directory-login)
+3. [Using ThreatAtlas](#using-threatatlas)
    - [Products](#products)
    - [Data Flow Diagrams](#data-flow-diagrams)
    - [Threats and Mitigations](#threats-and-mitigations)
@@ -37,6 +38,24 @@ Public self-registration is disabled. On a fresh install, log in with the defaul
 > ⚠️ **Change these credentials immediately** after your first login. You can do this under your profile settings once logged in.
 
 To add other users, go to **Admin → Invite User** and send an invitation link.
+
+---
+
+## Directory Login
+
+Administrators can add LDAP or Microsoft Active Directory providers under
+**Settings → SSO & SCIM → LDAP / Active Directory**. Once enabled, each provider
+appears as a button on the login page. Select it and sign in with your directory
+username and password.
+
+ThreatAtlas verifies the password directly against the directory and never
+stores it. The first successful login can create a standard ThreatAtlas user or
+link an existing account by email. After linking, local password login for that
+account is disabled. Keep a separate local administrator account for emergency
+access.
+
+Deployment settings, the Active Directory example, and the local OpenLDAP test
+fixture are described in the **[LDAP authentication guide](ldap.md)**.
 
 ---
 

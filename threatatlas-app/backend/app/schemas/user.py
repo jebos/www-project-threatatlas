@@ -100,6 +100,7 @@ class User(UserBase):
     is_active: bool
     role: Literal['admin', 'standard', 'read_only']
     effective_role: Literal['admin', 'standard', 'read_only']
+    ldap_provider: str | None = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

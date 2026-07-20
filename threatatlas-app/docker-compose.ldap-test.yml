@@ -1,0 +1,28 @@
+services:
+  ldap-test:
+    image: osixia/openldap:1.5.0
+    container_name: threatatlas-ldap-test
+    environment:
+      LDAP_ORGANISATION: ThreatAtlas Test Directory
+      LDAP_DOMAIN: example.test
+      LDAP_ADMIN_PASSWORD: admin-test-only
+      LDAP_CONFIG_PASSWORD: config-test-only
+      LDAP_TLS: "false"
+      LDAP_READONLY_USER: "true"
+      LDAP_READONLY_USER_USERNAME: threatatlas-bind
+      LDAP_READONLY_USER_PASSWORD: Bind-Password1!
+    command: --copy-service
+    ports:
+      - "127.0.0.1:${LDAP_TEST_PORT:-1389}:389"
+    volumes:
+      - ./ldap-test/bootstrap.ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom/50-threatatlas-test.ldif:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - ldapsearch -x -H ldap://localhost:389 -D 'cn=threatatlas-bind,dc=example,dc=test' -w 'Bind-Password1!' -b 'ou=People,dc=example,dc=test' -s base dn >/dev/null
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks:
+      - threatatlas-network

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import ENUM
@@ -10,6 +10,7 @@ class User(Base):
     """User account for authentication and authorization."""
 
     __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("ldap_provider", "ldap_dn", name="uq_users_ldap_identity"),)
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
@@ -21,6 +22,8 @@ class User(Base):
     role = Column(ENUM('admin', 'standard', 'read_only', name='userrole', create_type=False), default='standard', nullable=False)
     # SCIM externalId from the upstream IdP (unique). Null for users created locally.
     scim_external_id = Column(String(256), unique=True, index=True, nullable=True)
+    ldap_provider = Column(String(64), nullable=True)
+    ldap_dn = Column(String(1024), nullable=True)
     invited_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

@@ -7,6 +7,7 @@ import UserManagement from '@/pages/UserManagement';
 import AIConfigTab from '@/components/AIConfigTab';
 import AuditTerminal from '@/components/AuditTerminal';
 import SsoProvidersSection from '@/components/SsoProvidersSection';
+import LdapProvidersSection from '@/components/LdapProvidersSection';
 import ScimTokensSection from '@/components/ScimTokensSection';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -88,6 +89,7 @@ export default function Settings() {
               <p className="text-sm text-muted-foreground mt-0.5">Configure Single Sign-On providers and SCIM user provisioning.</p>
             </div>
             <SsoProvidersSection />
+            <LdapProvidersSection />
             <ScimTokensSection />
           </div>
         )}
@@ -815,4 +817,3 @@ function IntegrationsTab() {
     </Tabs>
   );
 }
-

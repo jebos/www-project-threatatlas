@@ -10,6 +10,7 @@ from app.models.diagram_version import DiagramVersion, DiagramThreatVersion, Dia
 from app.models.invitation import Invitation
 from app.models.product_collaborator import ProductCollaborator
 from app.models.oidc_provider import OIDCProviderConfig
+from app.models.ldap_provider import LDAPProviderConfig
 from app.models.group import Group, user_groups
 from app.models.scim_token import ScimToken
 from app.models.api_token import ApiToken
@@ -45,6 +46,7 @@ __all__ = [
     "Invitation",
     "ProductCollaborator",
     "OIDCProviderConfig",
+    "LDAPProviderConfig",
     "Group",
     "user_groups",
     "ScimToken",

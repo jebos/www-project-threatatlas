@@ -38,8 +38,16 @@ export interface OIDCProviderInfo {
   login_url: string;
 }
 
+export interface LDAPProviderInfo {
+  name: string;
+  display_name: string;
+}
+
 export const authApi = {
   listOidcProviders: () => api.get<OIDCProviderInfo[]>('/auth/oidc/providers'),
+  listLdapProviders: () => api.get<LDAPProviderInfo[]>('/auth/ldap/providers'),
+  loginLdap: (providerName: string, username: string, password: string) =>
+    api.post<{ access_token: string; token_type: string }>(`/auth/ldap/${providerName}/login`, { username, password }),
 };
 
 // Admin-managed SSO provider configuration
@@ -80,6 +88,40 @@ export const ssoApi = {
   create: (data: SsoProviderCreate) => api.post<SsoProvider>('/sso/providers', data),
   update: (id: number, data: SsoProviderUpdate) => api.put<SsoProvider>(`/sso/providers/${id}`, data),
   delete: (id: number) => api.delete(`/sso/providers/${id}`),
+};
+
+export type LDAPEncryption = 'plain' | 'start_tls' | 'simple_tls';
+
+export interface LDAPProvider {
+  id: number;
+  name: string;
+  display_name: string;
+  host: string;
+  port: number;
+  encryption: LDAPEncryption;
+  verify_cert: boolean;
+  bind_dn: string;
+  user_base_dn: string;
+  user_filter: string;
+  username_attribute: string;
+  email_attribute: string;
+  display_name_attribute: string;
+  active_directory: boolean;
+  auto_create_users: boolean;
+  is_enabled: boolean;
+}
+
+export interface LDAPProviderInput extends Omit<LDAPProvider, 'id'> {
+  bind_password?: string;
+}
+
+export const ldapApi = {
+  list: () => api.get<LDAPProvider[]>('/ldap/providers'),
+  create: (data: LDAPProviderInput & { bind_password: string }) => api.post<LDAPProvider>('/ldap/providers', data),
+  update: (id: number, data: Partial<Omit<LDAPProviderInput, 'name'>>) =>
+    api.put<LDAPProvider>(`/ldap/providers/${id}`, data),
+  test: (id: number) => api.post<{ success: boolean; message: string }>(`/ldap/providers/${id}/test`),
+  delete: (id: number) => api.delete(`/ldap/providers/${id}`),
 };
 
 // Groups

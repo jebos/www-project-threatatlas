@@ -1,0 +1,21 @@
+dn: ou=People,dc=example,dc=test
+objectClass: organizationalUnit
+ou: People
+
+dn: uid=alice,ou=People,dc=example,dc=test
+objectClass: inetOrgPerson
+uid: alice
+cn: Alice Directory
+sn: Directory
+givenName: Alice
+mail: alice@example.com
+userPassword: Directory-Password1!
+
+dn: uid=bob,ou=People,dc=example,dc=test
+objectClass: inetOrgPerson
+uid: bob
+cn: Bob Directory
+sn: Directory
+givenName: Bob
+mail: bob@example.com
+userPassword: Directory-Password2!
