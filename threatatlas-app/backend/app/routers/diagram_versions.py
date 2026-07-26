@@ -11,7 +11,7 @@ from app.schemas.diagram_version import (
 )
 from app.services import VersionService
 from app.auth.dependencies import get_current_user
-from app.auth.permissions import can_access_product, PermissionDenied
+from app.auth.permissions import can_access_product, can_edit_product, PermissionDenied
 
 router = APIRouter(prefix="/diagram-versions", tags=["diagram-versions"])
 
@@ -26,6 +26,14 @@ def check_diagram_access(diagram_id: int, user: UserModel, db: Session) -> Diagr
         )
     if not can_access_product(user, diagram.product):
         raise PermissionDenied("Not authorized to access this diagram")
+    return diagram
+
+
+def check_diagram_edit(diagram_id: int, user: UserModel, db: Session) -> DiagramModel:
+    """Return a diagram only when the caller may modify its product."""
+    diagram = check_diagram_access(diagram_id, user, db)
+    if not can_edit_product(user, diagram.product):
+        raise PermissionDenied("Not authorized to modify this diagram")
     return diagram
 
 
@@ -61,8 +69,8 @@ def create_version(
     db: Session = Depends(get_db)
 ):
     """Manually create a version snapshot."""
-    # Get diagram and check access
-    diagram = check_diagram_access(diagram_id, current_user, db)
+    # Creating a snapshot mutates diagram history and therefore requires edit access.
+    diagram = check_diagram_edit(diagram_id, current_user, db)
 
     # Create version
     version = VersionService.create_version(
@@ -109,8 +117,8 @@ def restore_version(
     db: Session = Depends(get_db)
 ):
     """Restore diagram to a previous version (creates new version)."""
-    # Get diagram and check access
-    diagram = check_diagram_access(diagram_id, current_user, db)
+    # Restoring replaces the current canvas and therefore requires edit access.
+    diagram = check_diagram_edit(diagram_id, current_user, db)
 
     try:
         new_version = VersionService.restore_version(
@@ -134,7 +142,7 @@ def get_version(
     db: Session = Depends(get_db)
 ):
     """Get a specific version."""
-    # Check diagram access first
+    # Reading history requires diagram access only.
     check_diagram_access(diagram_id, current_user, db)
 
     version = db.query(DiagramVersionModel).filter(
@@ -159,8 +167,8 @@ def delete_version(
     db: Session = Depends(get_db)
 ):
     """Delete a specific version."""
-    # Check diagram access first
-    check_diagram_access(diagram_id, current_user, db)
+    # Deleting history is a mutation and therefore requires edit access.
+    check_diagram_edit(diagram_id, current_user, db)
 
     version = db.query(DiagramVersionModel).filter(
         DiagramVersionModel.diagram_id == diagram_id,

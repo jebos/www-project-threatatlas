@@ -12,7 +12,14 @@ import asyncio
 
 import pytest
 
-from app.routers.collaboration import ConnectionManager, _color_for
+from app.models import Diagram, Product, ProductCollaborator, User
+from app.routers import collaboration
+from app.routers.collaboration import (
+    ConnectionManager,
+    MUTATING_MESSAGE_TYPES,
+    _can_edit_diagram,
+    _color_for,
+)
 
 
 class FakeWS:
@@ -100,3 +107,58 @@ def test_broadcast_survives_a_dead_socket():
     run(_populate(manager, [(1, dead, 10, "a"), (1, alive, 20, "b")]))
     run(manager.broadcast(1, {"type": "node_op"}))  # must not raise
     assert alive.sent == [{"type": "node_op"}]
+
+
+def test_collaborative_mutations_are_explicitly_classified():
+    assert MUTATING_MESSAGE_TYPES == {"diagram_saved", "diagram_sync", "node_op"}
+    assert "cursor_move" not in MUTATING_MESSAGE_TYPES
+
+
+class FakeQuery:
+    def __init__(self, result):
+        self.result = result
+
+    def filter(self, *args):
+        return self
+
+    def first(self):
+        return self.result
+
+
+class FakeSession:
+    def __init__(self, user, diagram):
+        self.user = user
+        self.diagram = diagram
+
+    def query(self, model):
+        return FakeQuery(self.user if model is User else self.diagram)
+
+    def close(self):
+        pass
+
+
+@pytest.mark.parametrize(
+    ("collaborator_role", "user_role", "expected"),
+    [
+        ("viewer", "standard", False),
+        ("editor", "standard", True),
+        ("editor", "read_only", False),
+    ],
+)
+def test_websocket_edit_check_uses_effective_product_permission(
+    monkeypatch, collaborator_role, user_role, expected
+):
+    user = User(id=10, email="collaborator@test.com", role=user_role, is_active=True)
+    product = Product(id=20, user_id=99, name="Shared Product", is_public=False)
+    product.collaborators = [
+        ProductCollaborator(
+            product_id=product.id,
+            user_id=user.id,
+            role=collaborator_role,
+            added_by=99,
+        )
+    ]
+    diagram = Diagram(id=30, product_id=product.id, name="Shared Diagram", product=product)
+    monkeypatch.setattr(collaboration, "SessionLocal", lambda: FakeSession(user, diagram))
+
+    assert _can_edit_diagram(user.id, diagram.id) is expected

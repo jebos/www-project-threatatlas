@@ -28,6 +28,7 @@ class Diagram(DiagramBase):
     """Schema for Diagram response."""
     id: int
     product_id: int
+    can_edit: bool = False
     current_version: int = 0
     auto_version: bool = True
     created_at: datetime

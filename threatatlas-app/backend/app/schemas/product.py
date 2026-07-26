@@ -49,6 +49,7 @@ class ProductUpdate(ProductBase):
 class Product(ProductBase):
     """Schema for Product response."""
     id: int
+    can_edit: bool = False
     created_at: datetime
     updated_at: datetime
 

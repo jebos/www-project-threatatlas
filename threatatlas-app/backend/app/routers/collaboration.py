@@ -26,6 +26,7 @@ from app.auth.jwt import decode_access_token
 from app.database import SessionLocal
 from app.models import User
 from app.models.api_token import ApiToken
+from app.auth.permissions import can_edit_product
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +106,8 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+MUTATING_MESSAGE_TYPES = frozenset({"diagram_saved", "diagram_sync", "node_op"})
+
 
 # ── auth helper ───────────────────────────────────────────────────────────────
 
@@ -147,6 +150,23 @@ def _authenticate(token: str, db: Session) -> User | None:
             return user
 
     return None
+
+
+def _can_edit_diagram(user_id: int, diagram_id: int) -> bool:
+    """Re-evaluate edit access for every collaborative mutation.
+
+    Permissions can change while a socket remains open. A fresh lookup prevents
+    a demoted user from continuing to alter other clients' live canvas state.
+    """
+    from app.models import Diagram as DiagramModel
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
+        diagram = db.query(DiagramModel).filter(DiagramModel.id == diagram_id).first()
+        return bool(user and diagram and can_edit_product(user, diagram.product))
+    finally:
+        db.close()
 
 
 # ── WebSocket endpoint ────────────────────────────────────────────────────────
@@ -209,6 +229,10 @@ async def diagram_presence(websocket: WebSocket, diagram_id: int) -> None:
                 # Non-JSON frame or protocol error — skip silently
                 continue
             msg_type = data.get("type")
+
+            if msg_type in MUTATING_MESSAGE_TYPES and not _can_edit_diagram(user_id, diagram_id):
+                await websocket.send_json({"type": "error", "message": "read_only"})
+                continue
 
             if msg_type == "diagram_saved":
                 await manager.broadcast(

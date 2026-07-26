@@ -13,6 +13,13 @@ from app.services.audit import log_event
 router = APIRouter(prefix="/diagrams", tags=["diagrams"])
 
 
+def _diagram_response(diagram: DiagramModel, user: UserModel) -> Diagram:
+    """Serialize a diagram with the caller's effective product edit permission."""
+    return Diagram.model_validate(diagram).model_copy(
+        update={"can_edit": can_edit_product(user, diagram.product)}
+    )
+
+
 @router.get("", response_model=list[Diagram])
 def list_diagrams(
     current_user: UserModel = Depends(get_current_user),
@@ -57,7 +64,7 @@ def list_diagrams(
         query = query.filter(DiagramModel.product_id == product_id)
 
     diagrams = query.offset(skip).limit(limit).all()
-    return diagrams
+    return [_diagram_response(diagram, current_user) for diagram in diagrams]
 
 
 @router.get("/{diagram_id}", response_model=Diagram)
@@ -83,7 +90,7 @@ def get_diagram(
     if not can_access_product(current_user, diagram.product):
         raise PermissionDenied("Not authorized to access this diagram")
 
-    return diagram
+    return _diagram_response(diagram, current_user)
 
 
 @router.post("", response_model=Diagram, status_code=status.HTTP_201_CREATED)
@@ -130,7 +137,7 @@ def create_diagram(
         user_id=current_user.id,
     )
     db.commit()
-    return db_diagram
+    return _diagram_response(db_diagram, current_user)
 
 
 @router.put("/{diagram_id}", response_model=Diagram)
@@ -203,7 +210,7 @@ def update_diagram(
         user_id=current_user.id,
     )
     db.commit()
-    return db_diagram
+    return _diagram_response(db_diagram, current_user)
 
 
 @router.delete("/{diagram_id}", status_code=status.HTTP_204_NO_CONTENT)

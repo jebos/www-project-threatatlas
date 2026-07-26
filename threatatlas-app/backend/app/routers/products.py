@@ -11,6 +11,13 @@ from app.auth.permissions import require_standard_or_admin, can_access_product, 
 router = APIRouter(prefix="/products", tags=["products"])
 
 
+def _product_response(product: ProductModel, user: UserModel) -> Product:
+    """Serialize a product with the caller's effective edit permission."""
+    return Product.model_validate(product).model_copy(
+        update={"can_edit": can_edit_product(user, product)}
+    )
+
+
 @router.get("", response_model=list[Product])
 def list_products(
     current_user: UserModel = Depends(get_current_user),
@@ -41,7 +48,7 @@ def list_products(
         ).distinct()
 
     products = query.offset(skip).limit(limit).all()
-    return products
+    return [_product_response(product, current_user) for product in products]
 
 
 @router.get("/{product_id}", response_model=Product)
@@ -72,7 +79,7 @@ def get_product(
     if not can_access_product(current_user, product):
         raise PermissionDenied("Not authorized to access this product")
 
-    return product
+    return _product_response(product, current_user)
 
 
 @router.post("", response_model=Product, status_code=status.HTTP_201_CREATED)
@@ -95,7 +102,7 @@ def create_product(
     db.add(db_product)
     db.commit()
     db.refresh(db_product)
-    return db_product
+    return _product_response(db_product, current_user)
 
 
 @router.put("/{product_id}", response_model=Product)
@@ -133,7 +140,7 @@ def update_product(
 
     db.commit()
     db.refresh(db_product)
-    return db_product
+    return _product_response(db_product, current_user)
 
 
 @router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
