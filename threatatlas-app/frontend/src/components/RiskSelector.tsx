@@ -6,6 +6,7 @@ interface RiskSelectorProps {
   impact: number | null;
   onLikelihoodChange: (value: number) => void;
   onImpactChange: (value: number) => void;
+  disabled?: boolean;
 }
 
 const likelihoodLabels: Record<number, string> = {
@@ -30,9 +31,10 @@ interface SliderRowProps {
   stepLabels: Record<number, string>;
   onChange: (v: number) => void;
   onCommit: (v: number) => void;
+  disabled?: boolean;
 }
 
-function SliderRow({ label, value, stepLabels, onChange, onCommit }: SliderRowProps) {
+function SliderRow({ label, value, stepLabels, onChange, onCommit, disabled = false }: SliderRowProps) {
   // Local state so dragging doesn't bubble up API calls on every tick
   const [local, setLocal] = useState<number>(value ?? 1);
 
@@ -68,6 +70,7 @@ function SliderRow({ label, value, stepLabels, onChange, onCommit }: SliderRowPr
           onChange(v);
         }}
         onValueCommit={([v]) => onCommit(v)}
+        disabled={disabled}
         className={!isSet ? 'opacity-50' : ''}
       />
 
@@ -90,7 +93,7 @@ function SliderRow({ label, value, stepLabels, onChange, onCommit }: SliderRowPr
   );
 }
 
-export function RiskSelector({ likelihood, impact, onLikelihoodChange, onImpactChange }: RiskSelectorProps) {
+export function RiskSelector({ likelihood, impact, onLikelihoodChange, onImpactChange, disabled = false }: RiskSelectorProps) {
   const [localLikelihood, setLocalLikelihood] = useState<number>(likelihood ?? 1);
   const [localImpact, setLocalImpact] = useState<number>(impact ?? 1);
 
@@ -108,6 +111,7 @@ export function RiskSelector({ likelihood, impact, onLikelihoodChange, onImpactC
         stepLabels={likelihoodLabels}
         onChange={setLocalLikelihood}
         onCommit={onLikelihoodChange}
+        disabled={disabled}
       />
       <SliderRow
         label="Impact"
@@ -115,6 +119,7 @@ export function RiskSelector({ likelihood, impact, onLikelihoodChange, onImpactC
         stepLabels={impactLabels}
         onChange={setLocalImpact}
         onCommit={onImpactChange}
+        disabled={disabled}
       />
     </div>
   );

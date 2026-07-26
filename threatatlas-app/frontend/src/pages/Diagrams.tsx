@@ -31,6 +31,7 @@ import { toJpeg } from 'html-to-image';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBreadcrumb } from '@/contexts/BreadcrumbContext';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -102,10 +103,12 @@ import DiagramRightPanel from '@/components/DiagramRightPanel';
 import { useCollaboration } from '@/hooks/useCollaboration';
 import { CollabPresence } from '@/components/CollabPresence';
 import { CollabCursors } from '@/components/CollabCursors';
+import { filterEdgeChangesForPermission, filterNodeChangesForPermission } from '@/lib/canvasPermissions';
 
 interface Product {
   id: number;
   name: string;
+  can_edit: boolean;
 }
 
 interface Diagram {
@@ -113,6 +116,7 @@ interface Diagram {
   product_id: number;
   name: string;
   diagram_data: any;
+  can_edit: boolean;
 }
 
 const nodeTypes = {
@@ -167,21 +171,31 @@ export function DiagramsContent() {
   const [selectedProduct, setSelectedProduct] = useState<number | null>(null);
   const [diagrams, setDiagrams] = useState<Diagram[]>([]);
   const [selectedDiagram, setSelectedDiagram] = useState<number | null>(null);
+  const [diagramCanEdit, setDiagramCanEdit] = useState(false);
   const [diagramName, setDiagramName] = useState('');
   const [saving, setSaving] = useState(false);
+  const selectedProductData = products.find(product => product.id === selectedProduct);
+  const canEditProduct = canWrite && selectedProductData?.can_edit === true;
+  const canEditDiagram = canWrite && diagramCanEdit;
 
   const [nodes, setNodes, _onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, _onEdgesChange] = useEdgesState<Edge>([]);
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
-    if (!isApplyingRemoteRef.current) setIsDirty(true);
-    _onNodesChange(changes);
-  }, [_onNodesChange]);
+    const allowedChanges = filterNodeChangesForPermission(changes, canEditDiagram);
+    if (canEditDiagram && !isApplyingRemoteRef.current && changes.some(change => change.type !== 'select')) {
+      setIsDirty(true);
+    }
+    _onNodesChange(allowedChanges);
+  }, [_onNodesChange, canEditDiagram]);
 
   const onEdgesChange = useCallback((changes: EdgeChange[]) => {
-    if (!isApplyingRemoteRef.current) setIsDirty(true);
-    _onEdgesChange(changes);
-  }, [_onEdgesChange]);
+    const allowedChanges = filterEdgeChangesForPermission(changes, canEditDiagram);
+    if (canEditDiagram && !isApplyingRemoteRef.current && changes.some(change => change.type !== 'select')) {
+      setIsDirty(true);
+    }
+    _onEdgesChange(allowedChanges);
+  }, [_onEdgesChange, canEditDiagram]);
   const { fitView, getNodes, getEdges, screenToFlowPosition } = useReactFlow();
 
   // ── Boundary attach state ──────────────────────────────────────────────────
@@ -318,6 +332,16 @@ export function DiagramsContent() {
   const [isEditingModel, setIsEditingModel] = useState(false);
   const [isDeletingModel, setIsDeletingModel] = useState(false);
 
+  useEffect(() => {
+    if (!canEditDiagram) {
+      setRightPanelTab('inspector');
+      setShowVersionComment(false);
+      setIsCreatingModel(false);
+      setIsEditingModel(false);
+      setIsDeletingModel(false);
+    }
+  }, [canEditDiagram]);
+
   // Threat/mitigation count badges per element_id
   const [elementCounts, setElementCounts] = useState<Record<string, { t: number; m: number; maxSeverity?: string }>>({});
   const [heatmapEnabled, setHeatmapEnabled] = useState(false);
@@ -329,7 +353,7 @@ export function DiagramsContent() {
 
   // ── Live sync + auto-save effect ──────────────────────────────────────────
   useEffect(() => {
-    if (!isDirty || !selectedDiagram) return;
+    if (!isDirty || !selectedDiagram || !canEditDiagram) return;
 
     // Broadcast diagram state to other collaborators (throttled in sendDiagramSync)
     const cleanNodes = nodes.map(({ data: { threatCount: _t, mitigationCount: _m, isDropTarget: _d, heatmapEnabled: _he, maxSeverity: _ms, aiFocused: _af, ...restData }, ...rest }) => ({
@@ -341,21 +365,19 @@ export function DiagramsContent() {
       sendDiagramSync(cleanNodes, edges);
     }, 200);
 
-    // Auto-save after 3 seconds of inactivity (only when user has write access)
-    if (canWrite) {
-      setAutoSaveStatus('pending');
-      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-      autoSaveTimerRef.current = setTimeout(() => {
-        // Skip if a manual save is already in progress
-        if (!saving) handleSaveDiagram(true);
-      }, 3000);
-    }
+    // Auto-save after 3 seconds of inactivity.
+    setAutoSaveStatus('pending');
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      // Skip if a manual save is already in progress
+      if (!saving) handleSaveDiagram(true);
+    }, 3000);
 
     return () => {
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDirty, nodes, edges, selectedDiagram]);
+  }, [isDirty, nodes, edges, selectedDiagram, canEditDiagram]);
 
   const loadElementCounts = async (diagId: number, modelId?: number | null) => {
     try {
@@ -460,11 +482,13 @@ export function DiagramsContent() {
   useEffect(() => {
     if (diagramId) {
       const id = parseInt(diagramId);
+      setDiagramCanEdit(false);
       selectedDiagramRef.current = id;
       setSelectedDiagram(id);
       setSelectedDiagramForCollab(id);
       loadDiagram(id);
     } else {
+      setDiagramCanEdit(false);
       selectedDiagramRef.current = null;
       setSelectedDiagramForCollab(null);
     }
@@ -494,6 +518,7 @@ export function DiagramsContent() {
     try {
       const response = await diagramsApi.get(diagId);
       const diagram = response.data;
+      setDiagramCanEdit(diagram.can_edit === true);
       setDiagramName(diagram.name);
       setCurrentVersion(diagram.current_version || 0);
 
@@ -512,13 +537,14 @@ export function DiagramsContent() {
       }
       loadElementCounts(diagId, activeModelId);
     } catch (error) {
+      setDiagramCanEdit(false);
       console.error('Error loading diagram:', error);
       toast.error('Failed to load diagram.');
     }
   };
 
   const handleCreateDiagram = async () => {
-    if (!selectedProduct) return;
+    if (!selectedProduct || !canEditProduct) return;
 
     try {
       const response = await diagramsApi.create({
@@ -537,7 +563,7 @@ export function DiagramsContent() {
   };
 
   const handleSaveDiagram = async (silent = false) => {
-    if (!selectedDiagram) return;
+    if (!selectedDiagram || !canEditDiagram) return;
 
     try {
       setSaving(true);
@@ -626,7 +652,9 @@ export function DiagramsContent() {
   };
 
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => {
+    (params: Connection) => {
+      if (!canEditDiagram) return;
+      setEdges((eds) => {
       const newEdge: Edge = {
         id: `edge-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         source: params.source,
@@ -638,13 +666,17 @@ export function DiagramsContent() {
         label: 'Data Flow',
       };
       return [...eds, newEdge];
-    }),
-    [setEdges]
+      });
+    },
+    [setEdges, canEditDiagram]
   );
 
   const onReconnect = useCallback(
-    (oldEdge: Edge, newConnection: Connection) => setEdges((eds) => reconnectEdge(oldEdge, newConnection, eds)),
-    [setEdges]
+    (oldEdge: Edge, newConnection: Connection) => {
+      if (!canEditDiagram) return;
+      setEdges((eds) => reconnectEdge(oldEdge, newConnection, eds));
+    },
+    [setEdges, canEditDiagram]
   );
 
   // ── Boundary grouping ──────────────────────────────────────────────────────
@@ -673,12 +705,14 @@ export function DiagramsContent() {
   }, [getNodes]);
 
   const onNodeDrag = useCallback((_event: React.MouseEvent, node: Node) => {
+    if (!canEditDiagram) return;
     if (node.data.type === 'boundary') { setDragOverBoundaryId(null); return; }
     const boundary = getBoundaryUnder(node);
     setDragOverBoundaryId(boundary?.id ?? null);
-  }, [getBoundaryUnder]);
+  }, [getBoundaryUnder, canEditDiagram]);
 
   const onNodeDragStop = useCallback((_event: React.MouseEvent, node: Node) => {
+    if (!canEditDiagram) return;
     if (node.data.type === 'boundary') return;
     setDragOverBoundaryId(null);
 
@@ -703,12 +737,13 @@ export function DiagramsContent() {
         return { ...rest, position: { x: absX, y: absY } };
       }));
     }
-  }, [getNodes, getBoundaryUnder, setNodes]);
+  }, [getNodes, getBoundaryUnder, setNodes, canEditDiagram]);
   // ── End boundary grouping ──────────────────────────────────────────────────
 
   const componentNotifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const addNode = (type: string, label?: string): string => {
+    if (!canEditDiagram) return '';
     const nodeId = `${type}-${Date.now()}`;
     const newNode: Node = {
       id: nodeId,
@@ -731,6 +766,7 @@ export function DiagramsContent() {
 
   const addComponentNode = (name: string, nodeType: string, componentId: number) => {
     const nodeId = addNode(nodeType, name);
+    if (!nodeId) return;
     // Show KB threat proposals for this component
     setComponentThreatTarget({ nodeId, nodeName: name, nodeType, componentId });
   };
@@ -756,7 +792,7 @@ export function DiagramsContent() {
   };
 
   const handleDeleteElement = () => {
-    if (!selectedElement) return;
+    if (!selectedElement || !canEditDiagram) return;
 
     if (selectedElement.type === 'node') {
       setNodes((nds) => nds.filter((node) => node.id !== selectedElement.id));
@@ -770,7 +806,7 @@ export function DiagramsContent() {
   };
 
   const handleDeleteDiagram = async () => {
-    if (!diagramToDelete || !selectedProduct) return;
+    if (!diagramToDelete || !selectedProduct || !canEditDiagram) return;
 
     try {
       const deletedId = diagramToDelete.id;
@@ -808,6 +844,7 @@ export function DiagramsContent() {
   }, [getNodes]);
 
   const handleDuplicate = useCallback((nodeId: string) => {
+    if (!canEditDiagram) return;
     const node = getNodes().find(n => n.id === nodeId);
     if (!node) return;
     const newId = `${node.data.type || 'node'}-${Date.now()}`;
@@ -819,9 +856,10 @@ export function DiagramsContent() {
     };
     setNodes(nds => [...nds, newNode]);
     setIsDirty(true);
-  }, [getNodes, setNodes]);
+  }, [getNodes, setNodes, canEditDiagram]);
 
   const handlePaste = useCallback(() => {
+    if (!canEditDiagram) return;
     if (clipboardRef.current.length === 0) return;
     const newNodes = clipboardRef.current.map(node => ({
       ...node,
@@ -831,13 +869,14 @@ export function DiagramsContent() {
     }));
     setNodes(nds => [...nds, ...newNodes]);
     setIsDirty(true);
-  }, [setNodes]);
+  }, [setNodes, canEditDiagram]);
 
   const handleSelectAll = useCallback(() => {
     setNodes(nds => nds.map(n => ({ ...n, selected: true })));
   }, [setNodes]);
 
   const handleDeleteFromContext = useCallback((nodeId?: string, edgeId?: string) => {
+    if (!canEditDiagram) return;
     if (nodeId) {
       setNodes(nds => nds.filter(n => n.id !== nodeId));
       setEdges(eds => eds.filter(e => e.source !== nodeId && e.target !== nodeId));
@@ -847,9 +886,10 @@ export function DiagramsContent() {
       setEdges(eds => eds.filter(e => e.id !== edgeId));
     }
     setIsDirty(true);
-  }, [setNodes, setEdges]);
+  }, [setNodes, setEdges, canEditDiagram]);
 
   const handleAddFromContext = useCallback((type: string, position?: { x: number; y: number }) => {
+    if (!canEditDiagram) return;
     const nodeId = `${type}-${Date.now()}`;
     const newNode: Node = {
       id: nodeId,
@@ -863,14 +903,15 @@ export function DiagramsContent() {
       return next.sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
     });
     setIsDirty(true);
-  }, [setNodes]);
+  }, [setNodes, canEditDiagram]);
 
   const handleSetAIFocus = useCallback((nodeId: string) => {
+    if (!canEditDiagram) return;
     setAiFocusNodeIds(prev =>
       prev.includes(nodeId) ? prev.filter(id => id !== nodeId) : [...prev, nodeId]
     );
     setRightPanelTab('ai');
-  }, []);
+  }, [canEditDiagram]);
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
   useEffect(() => {
@@ -895,18 +936,18 @@ export function DiagramsContent() {
         const selected = getNodes().filter(n => n.selected);
         if (selected.length > 0) clipboardRef.current = selected;
       }
-      if (ctrl && e.key === 'v') {
+      if (canEditDiagram && ctrl && e.key === 'v') {
         e.preventDefault();
         handlePaste();
       }
-      if (ctrl && e.key === 'd') {
+      if (canEditDiagram && ctrl && e.key === 'd') {
         e.preventDefault();
         const selected = getNodes().filter(n => n.selected);
         if (selected.length > 0) {
           selected.forEach(n => handleDuplicate(n.id));
         }
       }
-      if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (canEditDiagram && (e.key === 'Delete' || e.key === 'Backspace')) {
         const selectedNodes = getNodes().filter(n => n.selected);
         const selectedEdges = getEdges().filter(e2 => e2.selected);
         if (selectedNodes.length > 0 || selectedEdges.length > 0) {
@@ -928,7 +969,7 @@ export function DiagramsContent() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, edges, selectedDiagram]);
+  }, [nodes, edges, selectedDiagram, canEditDiagram]);
 
   // Close context menu when clicking outside it (bubble phase — fires AFTER item onClick)
   useEffect(() => {
@@ -976,9 +1017,10 @@ export function DiagramsContent() {
         heatmapEnabled,
         maxSeverity: elementCounts[node.id]?.maxSeverity,
         aiFocused: aiFocusNodeIds.includes(node.id),
+        editable: canEditDiagram,
       },
     })),
-    [nodes, elementCounts, dragOverBoundaryId, heatmapEnabled, aiFocusNodeIds]
+    [nodes, elementCounts, dragOverBoundaryId, heatmapEnabled, aiFocusNodeIds, canEditDiagram]
   );
 
   // Merge threat/mitigation counts into edge data for rendering only (never saved)
@@ -995,8 +1037,6 @@ export function DiagramsContent() {
     [edges, elementCounts]
   );
 
-  const selectedProductData = products.find(p => p.id === selectedProduct);
-
   // Push breadcrumb crumbs: Products → product name → diagram name (editable)
   useEffect(() => {
     if (!selectedProductData) { clearExtra(); return; }
@@ -1011,14 +1051,14 @@ export function DiagramsContent() {
       },
       ...(selectedDiagram ? [{
         label: diagramName,
-        editable: true,
+        editable: canEditDiagram,
         value: diagramName,
         onChange: (v: string) => setDiagramName(v),
       }] : []),
     ]);
     return () => clearExtra();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProductData?.name, selectedDiagram, diagramName, selectedProduct]);
+  }, [selectedProductData?.name, selectedDiagram, diagramName, selectedProduct, canEditDiagram]);
 
   if (!selectedProduct) {
     return (
@@ -1146,7 +1186,7 @@ export function DiagramsContent() {
       </Dialog>
 
       {/* Controlled ImportDrawioButton */}
-      {selectedProduct && (
+      {selectedProduct && canEditProduct && (
         <ImportDrawioButton
           productId={selectedProduct}
           onImportSuccess={handleImportSuccess}
@@ -1162,7 +1202,7 @@ export function DiagramsContent() {
   if (!selectedDiagram) {
     return (
       <div className="flex-1 p-4 md:p-6">
-        {creationDialogs}
+        {canEditProduct && creationDialogs}
         <div className="flex-1 space-y-6 mx-auto">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
@@ -1185,7 +1225,7 @@ export function DiagramsContent() {
                   ))}
                 </SelectContent>
               </Select>
-              {canWrite && (
+              {canEditProduct && (
                 <Button onClick={openCreateWizard}>
                   <Plus className="mr-2 h-4 w-4" />
                   New Diagram
@@ -1200,9 +1240,9 @@ export function DiagramsContent() {
                 <Grid3x3 className="h-12 w-12 text-muted-foreground mb-4" />
                 <p className="text-lg font-medium mb-2">No diagrams yet</p>
                 <p className="text-sm text-muted-foreground mb-6">
-                  {canWrite ? 'Create your first diagram to start threat modeling' : 'No diagrams available for this product'}
+                  {canEditProduct ? 'Create your first diagram to start threat modeling' : 'No diagrams available for this product'}
                 </p>
-                {canWrite && (
+                {canEditProduct && (
                   <Button onClick={openCreateWizard}>
                     <Plus className="mr-2 h-4 w-4" />
                     Create Diagram
@@ -1254,6 +1294,11 @@ export function DiagramsContent() {
         {/* Left: collab presence + save status */}
         <div className="flex items-center gap-2 min-w-0">
           <CollabPresence users={collabUsers} />
+          {!canEditDiagram && (
+            <Badge variant="secondary" className="text-[10px] font-semibold uppercase tracking-wide">
+              Read only
+            </Badge>
+          )}
           {autoSaveStatus === 'saved' && !saving && (
             <span className="text-[11px] text-emerald-500 font-medium flex items-center gap-1 shrink-0">
               <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -1285,11 +1330,11 @@ export function DiagramsContent() {
               onExternalEditClose={() => setIsEditingModel(false)}
               externalDeleteOpen={isDeletingModel}
               onExternalDeleteClose={() => setIsDeletingModel(false)}
+              canEdit={canEditDiagram}
             />
           </div>
 
-          {canWrite && (
-            <TooltipProvider>
+          <TooltipProvider>
               <div className="h-8 w-px bg-border/40 mx-0.5 shrink-0" />
 
               <div className="flex items-center bg-muted/40 rounded-lg p-0.5 gap-0.5">
@@ -1297,7 +1342,7 @@ export function DiagramsContent() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10"
-                      onClick={() => setIsCreatingModel(true)}>
+                      onClick={() => setIsCreatingModel(true)} disabled={!canEditDiagram}>
                       <Plus className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
@@ -1307,7 +1352,7 @@ export function DiagramsContent() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                      onClick={() => setIsEditingModel(true)} disabled={!activeModelId}>
+                      onClick={() => setIsEditingModel(true)} disabled={!canEditDiagram || !activeModelId}>
                       <Pencil className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
@@ -1317,7 +1362,7 @@ export function DiagramsContent() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive/60 hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => setIsDeletingModel(true)} disabled={!activeModelId}>
+                      onClick={() => setIsDeletingModel(true)} disabled={!canEditDiagram || !activeModelId}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
@@ -1330,7 +1375,7 @@ export function DiagramsContent() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button variant={showVersionComment ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8"
-                      onClick={() => setShowVersionComment(!showVersionComment)}>
+                      onClick={() => setShowVersionComment(!showVersionComment)} disabled={!canEditDiagram}>
                       <MessageSquare className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
@@ -1374,6 +1419,7 @@ export function DiagramsContent() {
                       size="icon"
                       className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
                       onClick={() => setRightPanelTab(rightPanelTab === 'ai' ? 'inspector' : 'ai')}
+                      disabled={!canEditDiagram}
                     >
                       <Sparkles className="h-4 w-4" />
                     </Button>
@@ -1408,6 +1454,7 @@ export function DiagramsContent() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-8 w-8"
+                      disabled={!canEditDiagram}
                       onClick={() => {
                         if (selectedDiagram) {
                           setShowImportChoice(true);
@@ -1481,20 +1528,19 @@ export function DiagramsContent() {
 
               <Button
                 onClick={() => handleSaveDiagram(false)}
-                disabled={saving}
+                disabled={saving || !canEditDiagram}
                 size="sm"
                 className="h-8 px-4 font-semibold shadow-sm bg-primary hover:bg-primary/90 transition-all active:scale-95"
               >
                 <Save className="mr-1.5 h-3.5 w-3.5" />
                 {saving ? 'Saving…' : 'Save'}
               </Button>
-            </TooltipProvider>
-          )}
+          </TooltipProvider>
         </div>
       </div>
 
       {/* Floating Version Note */}
-      {showVersionComment && (
+      {showVersionComment && canEditDiagram && (
         <div className="absolute top-14 right-4 z-50 w-80 shadow-2xl animate-in slide-in-from-top-4 duration-200">
           <Card className="border-primary/20 bg-background/95 backdrop-blur">
             <CardContent className="p-3">
@@ -1520,7 +1566,9 @@ export function DiagramsContent() {
       <div className="flex-1 flex min-h-0 overflow-hidden">
 
         {/* Left sidebar */}
-        <ToolPanel onAddNode={addNode} onAddComponent={addComponentNode} frameworkId={activeModel?.framework_id ?? null} />
+        {canEditDiagram && (
+          <ToolPanel onAddNode={addNode} onAddComponent={addComponentNode} frameworkId={activeModel?.framework_id ?? null} />
+        )}
 
         {/* Canvas */}
         <div
@@ -1538,7 +1586,10 @@ export function DiagramsContent() {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onReconnect={onReconnect}
-            edgesReconnectable
+            nodesDraggable={canEditDiagram}
+            nodesConnectable={canEditDiagram}
+            edgesReconnectable={canEditDiagram}
+            deleteKeyCode={null}
             onNodeClick={handleNodeClick}
             onEdgeClick={handleEdgeClick}
             onNodeDrag={onNodeDrag}
@@ -1600,14 +1651,14 @@ export function DiagramsContent() {
             >
               {contextMenu.type === 'pane' && (
                 <>
-                  {(['process', 'datastore', 'external', 'boundary'] as const).map((t) => (
+                  {canEditDiagram && (['process', 'datastore', 'external', 'boundary'] as const).map((t) => (
                     <button key={t} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors text-left"
                       onClick={() => { handleAddFromContext(t, contextMenu.position); setContextMenu(null); }}>
                       {t === 'process' ? 'Add Process' : t === 'datastore' ? 'Add Data Store' : t === 'external' ? 'Add External Entity' : 'Add Trust Boundary'}
                     </button>
                   ))}
                   <div className="my-1 h-px bg-border" />
-                  {clipboardRef.current.length > 0 && (
+                  {canEditDiagram && clipboardRef.current.length > 0 && (
                     <button className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors text-left"
                       onClick={() => { handlePaste(); setContextMenu(null); }}>
                       <span>Paste</span><span className="text-[11px] text-muted-foreground">Ctrl+V</span>
@@ -1625,24 +1676,28 @@ export function DiagramsContent() {
                     onClick={() => { handleCopy(contextMenu.nodeId!); setContextMenu(null); }}>
                     <span>Copy</span><span className="text-[11px] text-muted-foreground">Ctrl+C</span>
                   </button>
-                  <button className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors text-left"
-                    onClick={() => { handleDuplicate(contextMenu.nodeId!); setContextMenu(null); }}>
-                    <span>Duplicate</span><span className="text-[11px] text-muted-foreground">Ctrl+D</span>
-                  </button>
-                  <div className="my-1 h-px bg-border" />
-                  <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-primary/10 hover:text-primary transition-colors text-left text-primary/80"
-                    onClick={() => { handleSetAIFocus(contextMenu.nodeId!); setContextMenu(null); }}>
-                    <span>✦</span>
-                    <span>{aiFocusNodeIds.includes(contextMenu.nodeId!) ? 'Remove AI Focus' : 'Set as AI Focus'}</span>
-                  </button>
-                  <div className="my-1 h-px bg-border" />
-                  <button className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-destructive/10 hover:text-destructive transition-colors text-left text-destructive/80"
-                    onClick={() => { handleDeleteFromContext(contextMenu.nodeId); setContextMenu(null); }}>
-                    <span>Delete</span><span className="text-[11px]">Del</span>
-                  </button>
+                  {canEditDiagram && (
+                    <>
+                      <button className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors text-left"
+                        onClick={() => { handleDuplicate(contextMenu.nodeId!); setContextMenu(null); }}>
+                        <span>Duplicate</span><span className="text-[11px] text-muted-foreground">Ctrl+D</span>
+                      </button>
+                      <div className="my-1 h-px bg-border" />
+                      <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-primary/10 hover:text-primary transition-colors text-left text-primary/80"
+                        onClick={() => { handleSetAIFocus(contextMenu.nodeId!); setContextMenu(null); }}>
+                        <span>✦</span>
+                        <span>{aiFocusNodeIds.includes(contextMenu.nodeId!) ? 'Remove AI Focus' : 'Set as AI Focus'}</span>
+                      </button>
+                      <div className="my-1 h-px bg-border" />
+                      <button className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-destructive/10 hover:text-destructive transition-colors text-left text-destructive/80"
+                        onClick={() => { handleDeleteFromContext(contextMenu.nodeId); setContextMenu(null); }}>
+                        <span>Delete</span><span className="text-[11px]">Del</span>
+                      </button>
+                    </>
+                  )}
                 </>
               )}
-              {contextMenu.type === 'edge' && contextMenu.edgeId && (
+              {canEditDiagram && contextMenu.type === 'edge' && contextMenu.edgeId && (
                 <button className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-destructive/10 hover:text-destructive transition-colors text-left text-destructive/80"
                   onClick={() => { handleDeleteFromContext(undefined, contextMenu.edgeId); setContextMenu(null); }}>
                   <span>Delete</span><span className="text-[11px]">Del</span>
@@ -1676,7 +1731,7 @@ export function DiagramsContent() {
           }}
           selectedElement={selectedElement}
           onRename={(_id, name) => {
-            if (!selectedElement) return;
+            if (!selectedElement || !canEditDiagram) return;
             if (selectedElement.type === 'node') {
               setNodes((nds) =>
                 nds.map((node) =>
@@ -1697,7 +1752,7 @@ export function DiagramsContent() {
             setSelectedElement({ ...selectedElement, label: name });
           }}
           onDescriptionChange={(_id, description) => {
-            if (!selectedElement || selectedElement.type !== 'node') return;
+            if (!selectedElement || selectedElement.type !== 'node' || !canEditDiagram) return;
             setNodes((nds) =>
               nds.map((node) =>
                 node.id === selectedElement.id
@@ -1708,7 +1763,7 @@ export function DiagramsContent() {
             setSelectedElement({ ...selectedElement, description });
           }}
           onChangeNodeType={(_id, newType) => {
-            if (!selectedElement || selectedElement.type !== 'node') return;
+            if (!selectedElement || selectedElement.type !== 'node' || !canEditDiagram) return;
             const FIXED_SIZE: Record<string, { w: number; h: number }> = {
               process:   { w: 96,  h: 96  },
               datastore: { w: 140, h: 40  },
@@ -1739,7 +1794,7 @@ export function DiagramsContent() {
             requestAnimationFrame(() => setNodes(nds => [...nds]));
           }}
           onDeleteElement={handleDeleteElement}
-          canWrite={canWrite}
+          canWrite={canEditDiagram}
         />}
       </div>
 
@@ -1796,6 +1851,7 @@ export function DiagramsContent() {
         currentVersion={currentVersion}
         onRestore={handleVersionRestore}
         onCompare={handleVersionCompare}
+        canRestore={canEditDiagram}
       />
 
       {/* Version Comparison Dialog */}
@@ -1809,10 +1865,10 @@ export function DiagramsContent() {
         />
       )}
 
-      {creationDialogs}
+      {canEditProduct && creationDialogs}
 
       {/* Component KB Threats Panel */}
-      {componentThreatTarget && selectedDiagram && (
+      {componentThreatTarget && selectedDiagram && canEditDiagram && (
         <ComponentThreatsPanel
           componentId={componentThreatTarget.componentId}
           nodeName={componentThreatTarget.nodeName}

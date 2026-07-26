@@ -68,6 +68,7 @@ interface ModelSelectorProps {
   onExternalEditClose?: () => void;
   externalDeleteOpen?: boolean;
   onExternalDeleteClose?: () => void;
+  canEdit?: boolean;
 }
 
 export default function ModelSelector({
@@ -79,13 +80,22 @@ export default function ModelSelector({
   externalEditOpen,
   onExternalEditClose,
   externalDeleteOpen,
-  onExternalDeleteClose
+  onExternalDeleteClose,
+  canEdit = true,
 }: ModelSelectorProps) {
   const [models, setModels] = useState<Model[]>([]);
   const [frameworks, setFrameworks] = useState<Framework[]>([]);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  useEffect(() => {
+    if (!canEdit) {
+      setCreateDialogOpen(false);
+      setEditDialogOpen(false);
+      setDeleteDialogOpen(false);
+    }
+  }, [canEdit]);
 
   // Sync with external triggers
   useEffect(() => {
@@ -167,7 +177,7 @@ export default function ModelSelector({
   };
 
   const handleCreateModel = async () => {
-    if (!frameworkId || !modelName) return;
+    if (!canEdit || !frameworkId || !modelName) return;
 
     try {
       setCreating(true);
@@ -212,7 +222,7 @@ export default function ModelSelector({
   };
 
   const handleUpdateModel = async () => {
-    if (!editingModel || !editName) return;
+    if (!canEdit || !editingModel || !editName) return;
 
     try {
       setUpdating(true);
@@ -250,7 +260,7 @@ export default function ModelSelector({
   };
 
   const handleDeleteModel = async () => {
-    if (!modelToDelete) return;
+    if (!canEdit || !modelToDelete) return;
 
     try {
       setDeleting(true);

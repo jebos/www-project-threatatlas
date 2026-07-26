@@ -43,6 +43,7 @@ interface DiagramVersionHistoryProps {
   currentVersion: number;
   onRestore: () => void;
   onCompare?: (fromVersion: number, toVersion: number) => void;
+  canRestore?: boolean;
 }
 
 export default function DiagramVersionHistory({
@@ -52,6 +53,7 @@ export default function DiagramVersionHistory({
   currentVersion,
   onRestore,
   onCompare,
+  canRestore = false,
 }: DiagramVersionHistoryProps) {
   const [versions, setVersions] = useState<DiagramVersionSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -212,7 +214,7 @@ export default function DiagramVersionHistory({
                               >
                                 <GitCompare className={`h-3.5 w-3.5 ${isSelected ? 'text-primary' : ''}`} />
                               </Button>
-                              {!isCurrent && (
+                              {!isCurrent && canRestore && (
                                 <Button
                                   size="icon"
                                   variant="ghost"

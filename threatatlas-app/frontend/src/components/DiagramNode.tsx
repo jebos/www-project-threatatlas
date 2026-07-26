@@ -110,6 +110,7 @@ function DiagramNode({ data, selected }: NodeProps) {
   const heatmapEnabled = (data.heatmapEnabled as boolean) || false;
   const maxSeverity = data.maxSeverity as string | undefined;
   const aiFocused = (data.aiFocused as boolean) || false;
+  const editable = data.editable !== false;
   const heatGlow = getHeatmapGlow(heatmapEnabled, threatCount, maxSeverity);
 
   // Process - Circle (DFD standard)
@@ -456,7 +457,7 @@ function DiagramNode({ data, selected }: NodeProps) {
         <NodeResizer
           minWidth={200}
           minHeight={150}
-          isVisible={selected}
+          isVisible={selected && editable}
           lineClassName="!border-[var(--element-boundary)]"
           handleClassName="!h-3 !w-3 !bg-[var(--element-boundary)]"
         />

@@ -1099,6 +1099,7 @@ function InspectorPanel({
               modelFrameworkId={activeModelFrameworkId}
               elementId={selectedElement.id}
               elementType={selectedElement.type}
+              canEdit={canWrite}
             />
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -1168,28 +1169,30 @@ export default function DiagramRightPanel({
             <span className="h-1.5 w-1.5 rounded-full bg-primary ml-0.5" />
           )}
         </button>
-        <button
-          onClick={() => onTabChange('ai')}
-          className={cn(
-            'flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors border-b-2',
-            activeTab === 'ai'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          )}
-        >
-          <Sparkles className="h-3.5 w-3.5" />
-          AI Analysis
-          {pendingAICount > 0 && (
-            <span className="ml-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
-              {pendingAICount > 9 ? '9+' : pendingAICount}
-            </span>
-          )}
-        </button>
+        {canWrite && (
+          <button
+            onClick={() => onTabChange('ai')}
+            className={cn(
+              'flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors border-b-2',
+              activeTab === 'ai'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            AI Analysis
+            {pendingAICount > 0 && (
+              <span className="ml-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
+                {pendingAICount > 9 ? '9+' : pendingAICount}
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Tab content */}
       <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-        {activeTab === 'inspector' ? (
+        {activeTab === 'inspector' || !canWrite ? (
           <InspectorPanel
             selectedElement={selectedElement}
             diagramId={diagramId}
