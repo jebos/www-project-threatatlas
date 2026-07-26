@@ -20,7 +20,7 @@ from app.services.ldap_auth import LDAPUnavailableError, test_ldap_connection
 router = APIRouter(prefix="/ldap/providers", tags=["ldap"])
 
 
-@router.get("/", response_model=list[LDAPProviderRead])
+@router.get("", response_model=list[LDAPProviderRead])
 def list_providers(
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -29,7 +29,7 @@ def list_providers(
     return db.query(LDAPProviderConfig).order_by(LDAPProviderConfig.id).all()
 
 
-@router.post("/", response_model=LDAPProviderRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=LDAPProviderRead, status_code=status.HTTP_201_CREATED)
 def create_provider(
     payload: LDAPProviderCreate,
     current_user: UserModel = Depends(get_current_user),
