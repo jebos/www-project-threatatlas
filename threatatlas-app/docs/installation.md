@@ -60,6 +60,9 @@ cp .env.example .env
 - **`SECRET_KEY`**: Change this to a long random string for security.
 - **`POSTGRES_PASSWORD`**: Change the default before any shared or production deployment.
 - **`SMTP Settings`**: Required for email invitation links to work.
+- **`VITE_API_URL`**: Leave empty for the recommended same-origin Docker setup.
+  Set an absolute URL only when the API is intentionally exposed on a separate
+  public origin. The value is compiled into the frontend image at build time.
 - **`BACKEND_BASE_URL`**: Must be set to your backend's real public origin before enabling the [MCP server](mcp.md) — it's used as the OAuth issuer for AI assistant logins.
 
 ---

@@ -1,6 +1,31 @@
 import axios from 'axios';
 
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+export function resolveApiBaseUrl(
+  configuredUrl: string | undefined,
+  isDevelopment: boolean,
+  pageOrigin: string,
+): string {
+  const normalizedUrl = configuredUrl?.trim().replace(/\/+$/, '');
+
+  // `/api` is a common deployment value, but the API client appends that
+  // prefix itself. Treat it as an explicit request for the current origin.
+  if (normalizedUrl === '/api') return pageOrigin;
+  if (normalizedUrl) return normalizedUrl;
+
+  return isDevelopment ? 'http://localhost:8000' : pageOrigin;
+}
+
+export const API_BASE_URL = resolveApiBaseUrl(
+  import.meta.env.VITE_API_URL,
+  import.meta.env.DEV,
+  window.location.origin,
+);
+
+export function resolveWebSocketBaseUrl(apiBaseUrl: string): string {
+  return apiBaseUrl.replace(/^http/, 'ws');
+}
+
+export const WEBSOCKET_BASE_URL = resolveWebSocketBaseUrl(API_BASE_URL);
 
 export const api = axios.create({
   baseURL: `${API_BASE_URL}/api`,

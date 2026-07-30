@@ -14,9 +14,10 @@ RUN pnpm install --frozen-lockfile
 # Copy application code
 COPY . /app
 
-# Set API URL for production build
-ARG VITE_API_URL=http://localhost:8000
-ENV VITE_API_URL=$VITE_API_URL
+# Optional override for deployments that expose the API on a separate origin.
+# When omitted, the production frontend uses its own origin and the nginx proxy.
+ARG VITE_API_URL
+ENV VITE_API_URL=${VITE_API_URL}
 
 # Build the application
 RUN pnpm build

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { API_BASE_URL } from '@/lib/api';
+import { WEBSOCKET_BASE_URL } from '@/lib/api';
 
 export interface CollabUser {
   user_id: number;
@@ -85,10 +85,7 @@ export function useCollaboration({
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      // Derive WebSocket URL from API_BASE_URL so it works whether the frontend
-      // and backend are on the same origin (via nginx proxy) or different ports.
-      const wsBase = API_BASE_URL.replace(/^http/, 'ws');
-      const url = `${wsBase}/ws/diagrams/${id}?token=${encodeURIComponent(token)}`;
+      const url = `${WEBSOCKET_BASE_URL}/ws/diagrams/${id}?token=${encodeURIComponent(token)}`;
 
       const ws = new WebSocket(url);
       wsRef.current = ws;
