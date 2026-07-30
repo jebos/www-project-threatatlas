@@ -235,6 +235,7 @@ export const productsApi = {
   list: () => api.get('/products'),
   get: (id: number) => api.get(`/products/${id}`),
   create: (data: ProductInput & { name: string }) => api.post('/products', data),
+  duplicate: (id: number, name: string) => api.post(`/products/${id}/duplicate`, { name }),
   update: (id: number, data: ProductInput) => api.put(`/products/${id}`, data),
   delete: (id: number) => api.delete(`/products/${id}`),
 };

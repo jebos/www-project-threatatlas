@@ -32,18 +32,10 @@ import {
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -52,8 +44,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Plus,
-  MoreVertical,
   Pencil,
+  Copy,
   Trash2,
   Box,
   Grid3x3,
@@ -91,6 +83,7 @@ interface Product {
   owner_name: string | null;
   owner_email: string | null;
   jira_project_key: string | null;
+  can_edit: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -147,9 +140,13 @@ export default function Products() {
   const [loading, setLoading] = useState(true);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteDiagramOpen, setDeleteDiagramOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [duplicateProduct, setDuplicateProduct] = useState<Product | null>(null);
+  const [duplicateName, setDuplicateName] = useState('');
+  const [duplicating, setDuplicating] = useState(false);
   const [selectedDiagramId, setSelectedDiagramId] = useState<number | null>(null);
   const [expandedDiagrams, setExpandedDiagrams] = useState<Record<number, boolean>>({});
 
@@ -285,6 +282,30 @@ export default function Products() {
     setDeleteOpen(true);
   };
 
+  const openDuplicateDialog = (product: Product) => {
+    setDuplicateProduct(product);
+    setDuplicateName(`${product.name} Copy`);
+    setDuplicateOpen(true);
+  };
+
+  const handleDuplicate = async () => {
+    if (!duplicateProduct || !duplicateName.trim() || duplicating) return;
+    setDuplicating(true);
+    try {
+      const response = await productsApi.duplicate(duplicateProduct.id, duplicateName.trim());
+      setDuplicateOpen(false);
+      setDuplicateProduct(null);
+      await loadProducts();
+      toast.success('Product duplicated with a fresh security workflow');
+      navigate(`/products/${response.data.id}`);
+    } catch (error) {
+      console.error('Error duplicating product:', error);
+      toast.error('Failed to duplicate product');
+    } finally {
+      setDuplicating(false);
+    }
+  };
+
   return (
     <div className="flex-1 space-y-4 mx-auto p-4">
       {/* Page Header */}
@@ -368,7 +389,7 @@ export default function Products() {
                           </span>
                         </div>
                       </div>
-                      {canWrite && (
+                      {canWrite && product.can_edit && (
                         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                           <ShareProductDialog productId={product.id} productName={product.name}
                             isPublic={product.is_public} onProductUpdate={loadProducts}
@@ -386,6 +407,15 @@ export default function Products() {
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>Edit</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" size="icon" data-card-action className="h-7 w-7"
+                                onClick={(e) => { e.stopPropagation(); openDuplicateDialog(product); }}>
+                                <Copy className="h-3.5 w-3.5" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Duplicate</TooltipContent>
                           </Tooltip>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -510,6 +540,46 @@ export default function Products() {
           </div>
         )}
       </div>
+
+      {/* Duplicate Dialog */}
+      <Dialog
+        open={duplicateOpen}
+        onOpenChange={(open) => {
+          setDuplicateOpen(open);
+          if (!open) setDuplicateProduct(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Duplicate Product</DialogTitle>
+            <DialogDescription>
+              Create an independent copy of {duplicateProduct?.name}. Diagrams, models, threats,
+              and mitigations are copied; all security workflow states start fresh.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 py-4">
+            <Label htmlFor="duplicate-product-name">New product name</Label>
+            <Input
+              id="duplicate-product-name"
+              value={duplicateName}
+              onChange={(event) => setDuplicateName(event.target.value)}
+              autoFocus
+            />
+            <p className="text-xs text-muted-foreground">
+              Risk assessments, Jira project settings, acceptance decisions, comments, version
+              history, collaborators, and public visibility are not copied.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDuplicateOpen(false)} disabled={duplicating}>
+              Cancel
+            </Button>
+            <Button onClick={handleDuplicate} disabled={!duplicateName.trim() || duplicating}>
+              {duplicating ? 'Duplicating...' : 'Duplicate Product'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>

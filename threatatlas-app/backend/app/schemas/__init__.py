@@ -1,4 +1,4 @@
-from app.schemas.product import Product, ProductCreate, ProductUpdate
+from app.schemas.product import Product, ProductCreate, ProductDuplicate, ProductUpdate
 from app.schemas.framework import Framework, FrameworkCreate, FrameworkUpdate
 from app.schemas.diagram import Diagram, DiagramCreate, DiagramUpdate
 from app.schemas.threat import (
@@ -29,6 +29,7 @@ from app.schemas.invitation import (
 __all__ = [
     "Product",
     "ProductCreate",
+    "ProductDuplicate",
     "ProductUpdate",
     "Framework",
     "FrameworkCreate",

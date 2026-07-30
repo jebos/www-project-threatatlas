@@ -79,6 +79,17 @@ The product detail page shows:
 - A summary of **threats** and **mitigations** across all diagrams
 - Threat severity breakdown
 
+#### Duplicating a Product
+
+Editors can use the **Duplicate** action on a product card to create an
+independent product from an existing threat model. The copy retains diagrams,
+models, threat assignments, mitigation assignments, and attack-technique links.
+
+The new product starts a separate security workflow: models return to **In
+Progress**, threats to **Identified**, and mitigations to **Proposed**. Risk
+assessments, acceptance decisions, comments, diagram history, snapshots,
+collaborators, Jira project settings, and public visibility are not copied.
+
 ---
 
 ### Data Flow Diagrams

@@ -40,6 +40,20 @@ class ProductCreate(ProductBase):
     pass
 
 
+class ProductDuplicate(BaseModel):
+    """Input for creating an independent copy of a product."""
+
+    name: str = Field(min_length=1, max_length=200)
+
+    @field_validator("name")
+    @classmethod
+    def _normalize_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Product name must not be empty")
+        return value
+
+
 class ProductUpdate(ProductBase):
     """Schema for updating a Product."""
     name: str | None = None
